@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>com.aaa.lee.springcloud</groupId>
+    <artifactId>20191202-springcloud-parent</artifactId>
+    <version>1.0-SNAPSHOT</version>
+    <modules>
+        <module>20191202-consumer-management</module>
+        <module>20191202-provider-management</module>
+        <module>20191202-springcloud-management</module>
+        <module>20191202-eureka-management</module>
+        <module>20191207-zuul-5081</module>
+        <module>20191207-zipkin-4081</module>
+        <module>20191211-springcloud-config-server</module>
+        <module>20191211-springcloud-config-client-2081</module>
+    </modules>
+    <packaging>pom</packaging>
+
+    <dependencyManagement>
+        <!--
+            dependencyManagement:管理jar包，子工程会默认加载父工程的jar包，一旦是使用dependencyManagement，子工程如果
+            使用到了父工程的jar包就必须要重写，也就是说父工程中其实是没有jar包引入的
+        -->
+        <dependencies>
+            <!--
+                一旦导入了spring-boot-dependencies这个jar包，就相当于把springboot项目中的所有jar包全部导入了
+                避免过量加载，就必须使用dependencyManagement标签，也就是说以后只要添加了spring-boot-dependencies和spring-cloud-dependencies
+                就必须要配置dependencyManagement标签
+            -->
+            <dependency>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-dependencies</artifactId>
+                <version>2.1.8.RELEASE</version>
+                <type>pom</type><!-- 标识了这个jar包的类型，只管理jar包，没有任何的代码(顶级项目) -->
+                <scope>import</scope><!-- 标识了该jar包什么的时候会被加载 runtime:当项目运行的时候该jar包才会被加载，test:当使用junit测试的时候该jar包才会被加载 -->
+            </dependency>
+            <dependency>
+                <groupId>org.springframework.cloud</groupId>
+                <artifactId>spring-cloud-dependencies</artifactId>
+                <version>Greenwich.SR3</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+            <dependency>
+                <groupId>mysql</groupId>
+                <artifactId>mysql-connector-java</artifactId>
+                <version>5.0.4</version>
+            </dependency>
+            <dependency>
+                <groupId>com.alibaba</groupId>
+                <artifactId>druid</artifactId>
+                <version>1.0.31</version>
+            </dependency>
+            <dependency>
+                <groupId>org.mybatis.spring.boot</groupId>
+                <artifactId>mybatis-spring-boot-starter</artifactId>
+                <version>1.3.0</version>
+            </dependency>
+            <dependency>
+                <groupId>io.zipkin.java</groupId>
+                <artifactId>zipkin-server</artifactId>
+                <version>2.11.8</version>
+                <exclusions>
+                    <exclusion>
+                        <groupId>org.apache.logging.log4j</groupId>
+                        <artifactId>log4j-slf4j-impl</artifactId>
+                    </exclusion>
+                </exclusions>
+            </dependency>
+            <dependency>
+                <groupId>io.zipkin.java</groupId>
+                <artifactId>zipkin-autoconfigure-ui</artifactId>
+                <version>2.11.8</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
+
+</project>

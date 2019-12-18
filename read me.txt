@@ -1,0 +1,404 @@
+1.20191202-springcloud-parent:pom工程
+    只管理jar包
+    --- 20191202-consumer-management:pom工程
+        管理consumer的jar包，方便了项目的横向扩展
+        20191202-consumer-7081
+        20191202-consumer-7082
+        -- 依赖于model
+
+    --- 20191202-provider-management:pom工程
+        管理provider的jar包，方便了项目的横向扩展
+        20191202-provider-8081
+        20191202-provider-8082
+        -- 依赖于service
+
+    consumer项目必须要调用provider项目，为什么？
+        consumer是放在外网，和客户端进行交互
+        provider是放在内网，和数据源进行交互
+        也就是说consumer的所有数据支持都来源于provider
+        consumer不能有和数据源有关的任何的配置以及代码(consumer只会有页面和controller)
+    因为springcloud使用的是restful解决了远程调用，也就是说必须要依赖于http，必须要使用的是controller调用controller(consumer的controller调用provider的controller)
+
+    --- 20191202-springcloud-management:pom工程
+        管理了所有model,mapper,service层的项目
+        --- 20191202-management-model
+        --- 20191202-management-mapper
+            -- 依赖于model
+        --- 20191202-management-service
+            -- 依赖于mapper
+
+2.zookeeper
+    注册中心
+    所有的provider都必须要向zookeeper去注册，但是consumer一定不能向zookeeper中注册
+    CP性:数据一致性
+        当zookeeper宕机的时候，整个zookeeper集群就会处于瘫痪状态
+    选举机制:
+        半数选举机制
+        还会受到事务id的影响(zxid)
+        官方给出的数字zookeeper选举leader的时候是30-120s(在选举leader的期间会使zookeeper集群处于瘫痪状态，就不会提供服务)
+
+!!!!3.eureka:
+    也是注册中心
+    同样提供了服务的注册和发现
+
+!!!4.eureka和zookeeper的区别
+    zookeeper保证了数据一致性(CP)
+    eureka保证了数据的可用性(AP)
+
+  5.配置eureka集群的时候，不能再使用hostname为localhost，需要自己去指定新的hostname
+        eureka01,02,03
+    修改hosts文件:
+        C盘--->windows文件夹--->system32--->drivers--->etc--->hosts
+        不要修改任何hosts文件中的内容
+        在最后一行进行添加
+        127.0.0.1 eureka01
+        127.0.0.1 eureka02
+        127.0.0.1 eureka03
+
+  6.ribbon:
+    客户端的负载均衡
+    ribbon自带了eureka的jar包，也就是说ribbon默认如果运行就必须要依靠eureka，也就是说在springcloud项目运行ribbon的话先运行eureka
+    ribbon是配在consumer还是配在provider中？consumer
+    如果在项目中导入了eureka的jar包会不会jar包冲突？
+        ribbon已经自带了eureka的jar包，但是又在项目中导入了eureka的jar包，相当于把eureka的jar包导入了两次
+        按照逻辑来说jar包会冲突
+    所谓的jar包冲突就是因为两个一模一样的jar包版本不一样
+    1.因为无论是eureka还是ribbon的jar包都来源于父级工程，父级工程中jar包是确定的，最终导致eureka的jar包是一致，所以不会冲突
+    2.项目中所依赖的jar包，一定要比jar包中所依赖的jar包版本要高
+        ribbon依赖了eureka的jar包(1.1.0)
+        在项目中又导入了eureka的jar包(1.2.0)
+
+   homework:
+        1.把今天的代码敲一遍
+        2.用自己的语言把ribbon的八种算法解释一遍(手写)
+        3.如果有时间提前看Ribbon的源码解析，ribbon的自定义算法(如果时间赶，调整到后天)，ribbon脱离eureka实现负载均衡，feign
+
+  ribbon:
+    源码在ribbon-loadbalancer项目中--->loadbalancer包
+        IRule:接口
+            choose()--->因为要实现负载均衡(最少要两台provider)，所以必须要从集群中选出一台服务器(provider)
+                根据负载均衡的算法进行选择provider
+            ILoadBalancer get();
+            set(ILoadBalancer loadBalancer)
+        ILoadBalancer:负载均衡器(接口)
+            对所有的服务器做增删改查
+            addServers()--->添加服务(把所有的provider全部添加到负载均衡器等待被选择)
+            chooseServer()--->选择服务
+            markServerDown()--->标识服务为宕机状态
+                nginx:
+                    server01,server02(down)
+            getServerList(boolean availableOnly)---->获取所有的服务器列表
+                --->1.所有可用的服务器(true) 2.所有不可用的服务器(false)
+            getReachableServers()---->Reachable:可用的，存活的
+                获取所有的可用的服务器列表
+            getAllServers()--->获取所有的服务器列表
+        ----- AbstractLoadBalancer就是ILoadBalancer实现类(抽象类)
+
+        RandomRule:真正实现负载均衡算法类(随机)
+            --->继承了AbstractLoadBalancerRule(抽象类)--->实现了IRule
+            所以必须要实现所有抽象方法，但是该类是一个抽象类，可以不需要实现接口中的抽象方法
+            但是只要继承了AbstractLoadBalancerRule抽象类的普通类，就必须要实现AbstractLoadBalancerRule抽象类所没有实现的抽象方法
+            也就是说具体的ribbon的8种负载均衡算法都必须要实现choose方法
+
+        自定义随机:
+            --->如果两次所随机出的服务器一样，则重新随机一次
+            --->在5分钟之内如果两次随机出的服务器一样，则重新随机一次
+
+        ribbon不使用eureka实现负载均衡:
+            因为ribbon要解耦，当项目很小的时候是用不到注册中心，但是依然使用了ribbon的负载均衡，ribbon就必须要脱离eureka(很常用)
+
+    7.feign:
+        feign称之为声明式的服务调用
+        客户端的负载均衡
+        既然feign和ribbon都是负载均衡，区别是什么？
+            在真实开发环境中(springcloud)只会使用feign，不会用ribbon，因为feign中集成了ribbon，也就是说feign的负载均衡的功能是ribbon提供的
+            也就是说feign中没有负载均衡功能，feign的负载均衡来源于ribbon
+        ribbon如何实现远程调用:
+            使用的是spring的restful(RestTemplate)
+            controller--->调用--->controller
+            不遵循MVC的思想，程序员没有这种习惯
+        feign:
+            所实现的就是MVC的调用思想:
+                controller--->调用--->service--->调用--->mapper
+                如果使用feign的时候就不需要再使用RESTTemplate
+                非常符合程序员的开发习惯
+        dubbo和ribbon的调用形式
+        dubbo和feign的调用形式
+            controller--->调用--->service--->调用--->mapper
+            dubbo项目中实现远程调用所使用的是二进制(把所有的对象先转换为二进制流(必须要实现序列化接口))
+            feign仍然使用的restful，只是feign对restful做了封装--->controller调用controller
+                (consumer)controller--->api(service接口)--->(provider)controller--->service实现类--->mapper
+                也就是说api工程中必须要使用feign进行远程调用--->必须要添加feign的jar包
+            spring所有的框架使用的都是http
+
+        20191205_homework:
+            1.完整的把我的代码敲一遍
+            2.自己尝试使用feign进行传递参数(传递简单类型，传递对象类型)
+                传递多个简单类型
+                public String test(String id, String username)
+                传递多个对象类型
+                public String test(User user, Book book)
+            !!3.实现feign的图片上传
+
+    !!!!!!8.hystrix
+        断容器
+        保险丝:
+            保护了整个电路的安全性(当家里某些家用电器突然短路的时候，电流会增大，如果没有保险丝，可能造成大面积停电/着火，保险丝的作用就是当被击穿的时候会直接跳闸，保护了电路)
+        断容器就是保险丝
+        什么是容错？
+            !!!!!当项目抛出异常的时候，仍然可以正常运行，并且返回给客户端一个可以接受的结果
+
+        服务的扇出
+            看图即可
+        服务的雪崩(雪崩效应)
+            服务A
+                服务A需要调用服务B,C,D，当A成功的调用到了B,C,D之后才说明服务A成功(服务才能正确的响应客户端)，而且B,C,D又调用
+                E,F,G，假设在这个时候突然有一条断了(B调用E的时候E抛异常)，B就无法获取到正确的数据，也就是说B无法响应给A，就算其他的所有
+                服务都正确了响应了，A仍然无法返回客户端，A会一直等待B的响应直到连接超时，如果只有一个请求没什么问题，但是如果有10万个请求，
+                在B的这个服务上会大量的请求积压，B宕机，A无法获取B的数据，所有的服务就会积压到A，导致A宕机，就会导致整个服务器集群宕机
+                这种模式称之为雪崩效应
+        断容器就是来解决雪崩效应
+
+        断容器的四大核心:(都围绕着解决雪崩效应的)
+            服务的限流
+                限制流量
+                当服务器的压力比较大的时候，也就是说负载比较多的时候，就不能再继续支撑很多请求了，假设最多还能负载100，使用限流设置之后只接收20，剩余的80个请求
+                返回给调用方一个可以接收的结果
+
+            服务的熔断
+                看图即可
+
+            服务的降级
+                当服务器的压力过大的时候，为了支撑核心业务的正常运行，其他无关紧要的业务就会直接关闭，直到核心业务处于平稳的状态，这个无关紧要的业务就处于一个降级的状态
+
+            服务的隔离(!!留作业!!)
+                线程池隔离
+                信号量隔离
+                通常情况下隔离是解决超时非常优秀的办法
+
+          !!灰色发布!!
+
+
+
+
+    feign+hysrix
+
+
+    !!!!9.zuul路由和zipkin服务追踪
+        zuul:路由
+            1.转发请求
+                当请求到达服务器(项目)的时候，首先被路由所拦截，然后再经过路由转发到所需要的服务中
+            2.过滤请求
+        zuul其实就是一个项目的入口，也就是说当客户端访问该项目的时候应该首先被路由所拦截(过滤器)
+
+        创建5081工程，需要添加jar包:
+            zuul的jar包
+            eureka的客户端
+            hystrix
+            ...
+
+        启动eureka
+        启动8081(provider)
+        启动5081(zuul)
+            5081---->8081
+            访问规则:
+                localhost:5081/8081中spring.application.name的值(不是eureka中Application的值)/需要访问的目标路径(@RequestMapping("/all"))
+        在5081中没有做任何的配置就可以直接通过spring.application.name的值访问8081，为什么？
+        从浏览器地址上去看，发现使用的是spring.application.name的值，其实不是这样的，其实最终仍然使用的是eureka中的Application的值
+        因为在浏览器中，所有的地址都不允许出现任何一个大写字母(WWW.BAIDU.COM)(只包含地址，不包含参数)
+        www.baidu.com?user=ZHANGSAN
+        在consumer:
+            不让eureka发现自己
+            不让自己注册进eureka
+            也就是说zuul并么有配置这两行，意味着路由也可以在eureka中任意被发现和注册自己，也就意味着provider就一定可以发现路由
+            路由也一定可以发现provider(直接会把zuul当成consumer去进行服务发现--->eureka的Application的值)
+            consumer在调用provider
+            相当于客户端所请求的是consumer
+            zuul在把请求转发给provider
+            其实相当于客户端请求仍然是provider
+
+        现在zuul已经完全达到了转发请求的目的！
+        思考问题：
+            以上写法是否存在弊端？
+                真实的地址仍然会暴露在外面(Application的值--->BOOK-PROVIDER)
+                绝对不允许把Application的值暴露给客户端(非常不安全)
+        解决办法:
+            localhost:5081/BOOK-PROVIDER/xxxx
+            也就是说BOOK-PROVIDER就不安全，使用其他的路径来进行替换该路径
+            localhost:5081/aaa/xxxx
+            也就是说通过aaa这个路径取代了BOOK-PROVIDER
+
+        也就是说必须要让zuul知道BOOK-PROVIDER这个值
+        其实zuul并不知道该值，只知道eureka中的Application是什么(BOOK-PROVIDER)
+        BOOK-PROVIDER代表的是8081
+        eureka的作用只是服务的注册与发现
+
+        假设zuul并不知道BOOK-PROVIDER
+        就是把aaa替换掉BOOK-PROVIDER
+        也就是说必须要让zuul这个项目知道BOOK-PROVIDER(所替换的项目地址是哪一个)
+
+        BOOK-PROVIDER
+        ORDER-PROVIDER
+        CART-PROVIDER
+        USER-PROVIDER
+
+        思考问题:
+            虽然已经把真实路径隐藏了，但是是否仍然存在问题？
+            虽然已近把BOOK-PROVIDER替换掉了，但是这个真实地址仍然可以继续访问，这样仍然不安全
+
+        解决办法:
+            把真实的路径禁用掉，把BOOK-PROVIDER这个真实的路径禁用了
+
+
+        路由具体是和consumer联系一起的，还是provider？
+            在教学环境中，zuul是和consumer联系在一起
+            但是在真实的开发环境中心zuul是服务(即可能是consumer，又可能是provider)联系在一起的
+
+
+        10.zipkin服务追踪(架构师)
+            服务是如何被调用的，调用了哪些服务，调用了该服务中的哪些方法....
+            因为必须要知道出异常了，需要记录日志
+            bookAll():一共出现异常50次
+            userAll():一共出现异常20次
+
+            eureka
+            provider
+            consumer调用provider
+            zuul转发到provider
+            zipkin
+
+        11.config
+            什么是config？
+                称呼为分布式配置中心
+                当微服务越来越来多的时候，如果做负载均衡，所有的配置文件都一样，properties会越来越多，就非常的不方便维护和管理
+                eg:
+                    8081
+                    8082
+                    8083
+                    8084
+                    8081-->8084做负载均衡，也就是说properties几乎一样
+                    spring.application.name=spring-provider-->spring-providers--->必须要修改四次
+                    所有的配置文件会出现大量的冗余--->封装
+                    最终所要实现的目标是把4个properties配置文件进行封装，最终项目只需要加载一次即可
+                解决一个问题：配置文件所存放的位置
+                单独创建工程，这个工程只管理配置文件，当其他的provider需要使用配置文件的时候，直接去该工程中加载即可
+
+            真实需求:
+                开发是分为不同流程
+                    可行性分析(天时地利人和)
+                    需求分析(是需要和甲方确认)
+                    需求设计(架构，预算，上线，预期时间)
+                    项目设计(原型图(产品经理))
+                    详细设计(会出HTML页面(美工进行交互))
+                    技术选型文档(springboot,mybatis....)
+                    -----架构搭建-----
+                    需求分工(由架构进行分工-->研发经理/主管-->研发组长-->组员(码农))
+                    测试(测试工程师)
+                    上线准备(运维)
+                    上线
+                    维护
+                在整个项目过程中，在开发阶段需要使用开发库(dev)，在测试阶段需要使用测试库(test)，在上线阶段需要使用正式库(pro)
+                根据阶段的不同加载数据库也不同--->如果是8081-->8084需要加载四次--->需要一直修改配置文件
+                创建一个config的服务器端--->配置github--->把配置文件上传到github上(dev,test,pro)--->当需要使用的是直接从github上加载配置文件
+
+                如果需要使用github就必须要使用git服务器(直接无脑安装下一步(修改安装路径))
+
+                准备:
+                    需要把git集成到IDEA中
+                    github的desktop工具
+
+                实现分布式配置中心:
+                    1.打开github官网注册账号
+                    2.创建github的仓库
+                        Repository name:创建仓库名称
+                        Description (optional):就是为该仓库进行简单介绍(选填)
+                    3.把github上的repository加载到本地
+                        3.1.打开desktop工具
+                        3.2.选择File选项--->clone Repository(把远程的github上的repository加载本机硬盘上)
+                        3.3.找到本地的文件夹创建配置文件
+                            application-dev.properties
+                            application-test.properties
+                            application-pro.properties
+                        3.4.分别在这三个配置文件中添加springboot的配置
+                            !!!!在配置文件中必须要添加一行!!!!
+                            spring.profiles=dev
+                            其他的配置都是常规的springboot配置
+                            spring.application.name
+                            server.port
+                            ....
+                        3.5.把配置文件提交到github上
+                            !!! 一个github上可以有很多个仓库，但是一个仓库只能对应一个项目 !!!
+                            换句话说，一个repository也就是一个项目
+                            commit to master:
+                                提交到master
+                            其实master就是命名空间，根据命名空间的不同，可以存放不同的项目
+                            order:
+                                所存放的项目都是和订单有关的(repository)
+                            换句话说master就是所提供的默认的命名空间(和eureka的defaultZone一样)
+                            当进行提交的时候发现无法提交
+                                ---> 为了防止发生事务问题
+                        3.6.
+                            推(push)到github上:
+                                repository--->Push
+                    4.创建config的服务器端
+                        需要从github上去加载配置文件
+                        创建config的服务器端--->添加jar包(config-server(springboot-web-starter))
+                    (面试必问)5.config的server项目的访问规则
+                        分为两种文件规则:
+                            无论是properties文件还是yml文件都可以使用:
+                                /{application}/{profile}[/{label}]
+
+                            properties:
+                                /{application}-{profile}.properties
+                                /{label}/{application}-{profile}.properties
+
+                            yml:
+                                /{application}-{profile}.yml
+                                /{label}/{application}-{profile}.yml
+                    5.当使用分布式配置中心的client的时候，不需要任何注解，因为加载的方式不是通过注解实现
+                        需要从config-server项目中把在github上的所有配置文件读取到client中
+                        !!!(面试点)只要是分布式配置中心的client端，就不再需要application.properties文件,bootstrap.properties文件
+                    !!!!!6.bootstrap.properties和application.properties如果同时存在的时候，哪一个会被先加载？为什么？
+                        bootstrap.properties
+                    7.(面试题)如果application.properties文件中和bootstrap.properties文件中的配置重复，哪一个优先级更高？
+                        bootstrap.properties
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
